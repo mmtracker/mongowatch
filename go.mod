@@ -1,4 +1,4 @@
-module github.com/zolia/mongowatch
+module github.com/mmtracker/mongowatch
 
 go 1.20
 

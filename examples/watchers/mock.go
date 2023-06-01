@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/zolia/mongowatch"
+	"github.com/mmtracker/mongowatch"
 )
 
 // Mock is a mock implementation of SomeCollectionWatcher

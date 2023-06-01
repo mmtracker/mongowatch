@@ -27,8 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 
-	"github.com/zolia/mongowatch/db"
-	"github.com/zolia/mongowatch/examples/watchers"
+	"github.com/mmtracker/mongowatch/db"
+	"github.com/mmtracker/mongowatch/examples/watchers"
 )
 
 func Test_DocumentProcessor_Start(t *testing.T) {

@@ -25,8 +25,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	mongoDriver "go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/zolia/mongowatch"
-	"github.com/zolia/mongowatch/db/tx"
+	"github.com/mmtracker/mongowatch"
+	"github.com/mmtracker/mongowatch/db/tx"
 )
 
 // CollectionStruct refers to structure stored in target collection

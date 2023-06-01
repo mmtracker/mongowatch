@@ -29,8 +29,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/zolia/mongowatch"
-	"github.com/zolia/mongowatch/db"
+	"github.com/mmtracker/mongowatch"
+	"github.com/mmtracker/mongowatch/db"
 )
 
 func Test_Manager_ProcessesAndDeletesMessages_ExceptLast(t *testing.T) {

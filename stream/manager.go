@@ -26,7 +26,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/zolia/mongowatch"
+	"github.com/mmtracker/mongowatch"
 )
 
 // Manager manages the change stream

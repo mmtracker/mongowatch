@@ -20,10 +20,10 @@ package main
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/zolia/mongowatch/db"
-	"github.com/zolia/mongowatch/db/tx"
-	"github.com/zolia/mongowatch/examples/watchers"
-	"github.com/zolia/mongowatch/stream"
+	"github.com/mmtracker/mongowatch/db"
+	"github.com/mmtracker/mongowatch/db/tx"
+	"github.com/mmtracker/mongowatch/examples/watchers"
+	"github.com/mmtracker/mongowatch/stream"
 )
 
 func main() {

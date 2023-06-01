@@ -28,7 +28,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 
-	"github.com/zolia/mongowatch"
+	"github.com/mmtracker/mongowatch"
 )
 
 // NewCollection returns a new collection

@@ -28,7 +28,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/zolia/mongowatch"
+	"github.com/mmtracker/mongowatch"
 )
 
 // DocumentProcessor is a wrapper around the mongo change stream watcher

@@ -23,7 +23,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/zolia/mongowatch"
+	"github.com/mmtracker/mongowatch"
 )
 
 // GetSaveResumePointFunc returns a function that saves a resume point to our collection
