@@ -19,6 +19,7 @@ package main
 
 import (
 	log "github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/mmtracker/mongowatch/db"
 	"github.com/mmtracker/mongowatch/db/tx"
@@ -33,11 +34,15 @@ func main() {
 	// target DB to watch for changes
 	// tune connection string to your needs
 	targetDB := db.ConnectToMongo("target_db_to_watch", "mongodb://target_db:27017")
-	processor := stream.NewDataProcessor(targetDB, "target_collection_to_watch", localDB)
+
+	// NOTE: you can create two processors to watch for changes in target DB on the same collection,
+	// but be sure to use different resume suffixes and separate collectionWatcher for each processor so not to duplicate actions on events
+	processor := stream.NewDataProcessor(targetDB, "target_collection_to_watch", "_resume_suffix_1", localDB)
 
 	txExecutor := tx.NewMongoExecutor(localDB.Client())
 	collectionWatcher := watchers.NewSomeCollectionWatcher(txExecutor)
-	err := processor.Start(collectionWatcher)
+
+	err := processor.Start(collectionWatcher, options.Required)
 	if err != nil {
 		log.Fatalf("failed to start event stream processor: %v", err)
 	}

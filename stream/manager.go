@@ -25,6 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/mmtracker/mongowatch"
 )
@@ -50,7 +51,7 @@ func NewManager(
 }
 
 // Watch starts the change stream manager
-func (m *Manager) Watch(ctx context.Context, tm *primitive.Timestamp, fn ...mongowatch.ChangeEventDispatcherFunc) error {
+func (m *Manager) Watch(ctx context.Context, fullDocumentMode options.FullDocument, tm *primitive.Timestamp, fn ...mongowatch.ChangeEventDispatcherFunc) error {
 	log.Tracef("manager.Watch")
 	ctx, m.cancel = context.WithCancel(ctx)
 	var err error
@@ -61,7 +62,7 @@ func (m *Manager) Watch(ctx context.Context, tm *primitive.Timestamp, fn ...mong
 		}
 	}
 
-	err = m.watcher.Start(ctx, tm, m.changeEventSaveFunc, m.changeEventDeleteFunc, fn...)
+	err = m.watcher.Start(ctx, fullDocumentMode, tm, m.changeEventSaveFunc, m.changeEventDeleteFunc, fn...)
 	if err != nil {
 		return fmt.Errorf("failed to watch mongo stream: %w", err)
 	}

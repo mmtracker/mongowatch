@@ -45,7 +45,7 @@ func Test_DocumentProcessor_Start(t *testing.T) {
 
 	const colName = "fake_sims"
 	col := NewCollection(colName, mongoTestsDB)
-	resumeCol := NewCollection(colName+ResumePrefix, mongoTestsDB)
+	resumeCol := NewCollection(colName+"_resume_suffix_in_test", mongoTestsDB)
 	db.Truncate(col, true)
 	db.Truncate(resumeCol, true)
 
@@ -56,11 +56,11 @@ func Test_DocumentProcessor_Start(t *testing.T) {
 			wg := sync.WaitGroup{}
 			wg.Add(records * actions)
 			mock := watchers.Mock{Limit: records, Wg: &wg}
-			dp := NewDataProcessor(mongoTestsDB, colName, mongoTestsDB)
+			dp := NewDataProcessor(mongoTestsDB, colName, "", mongoTestsDB)
 
 			// start data processor in the bg
 			go func() {
-				err := dp.Start(&mock)
+				err := dp.Start(&mock, "")
 				if err != nil {
 					log.Error(err)
 				}
