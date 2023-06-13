@@ -41,8 +41,9 @@ type ChangeStreamEvent struct {
 	// DocumentKey is the unique identifier for the document that was changed
 	// (e.g. the _id field for a document)
 	// some of our collections use custom IDs therefore it doesn't fit into the primitive.ObjectID type
-	DocumentKey  string      `bson:"documentKey" json:"documentKey"`
-	FullDocument primitive.M `bson:"fullDocument" json:"fullDocument"`
+	DocumentKey              string      `bson:"documentKey" json:"documentKey"`
+	FullDocument             primitive.M `bson:"fullDocument" json:"fullDocument"`
+	FullDocumentBeforeChange primitive.M `bson:"fullDocumentBeforeChange" json:"fullDocumentBeforeChange"`
 	// TODO: get previous field values e.g. paidUntil
 	UpdateDescription struct {
 		UpdatedFields map[string]interface{} `bson:"updatedFields" json:"updatedFields"`

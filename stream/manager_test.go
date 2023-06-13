@@ -199,7 +199,7 @@ func handlerFunc(wg *sync.WaitGroup) func(ctx context.Context, ce mongowatch.Cha
 func runWatchAsync(watchManager *Manager, tm *primitive.Timestamp, dispatcherFunc mongowatch.ChangeEventDispatcherFunc) {
 	go func() {
 		log.Tracef("starting watch in a routine")
-		err := watchManager.Watch(context.Background(), tm, dispatcherFunc)
+		err := watchManager.Watch(context.Background(), "", tm, dispatcherFunc)
 		if err != nil {
 			log.Errorf("watcher error: %s", err.Error())
 		}

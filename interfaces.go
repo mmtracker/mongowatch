@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // StreamResume stores relevant change stream events
@@ -46,7 +47,7 @@ type ChangeEventDispatcherFunc func(ctx context.Context, ce ChangeStreamEvent, e
 type ChangeStreamWatcher interface {
 	// Start resumes watching change events and
 	// passes event data to the supplied dispatch function for handling
-	Start(ctx context.Context, timestamp *primitive.Timestamp, saveFunc, deleteFunc ChangeEventDispatcherFunc, dispatchFuncs ...ChangeEventDispatcherFunc) error
+	Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc ChangeEventDispatcherFunc, dispatchFuncs ...ChangeEventDispatcherFunc) error
 }
 
 // CollectionWatcher is an interface for processing document data from a change stream
@@ -59,6 +60,6 @@ type CollectionWatcher interface {
 // DocumentProcessor is an interface for processing document data from a change stream
 type DocumentProcessor interface {
 	StartWithRetry(duration time.Duration, actions CollectionWatcher) error
-	Start(actions CollectionWatcher) error
+	Start(actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Stop()
 }

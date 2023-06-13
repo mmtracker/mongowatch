@@ -21,9 +21,11 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -55,4 +57,21 @@ func ConnectToMongo(dbName string, connectURL string) *mongo.Database {
 
 	// Get collection from database
 	return client.Database(dbName)
+}
+
+// Truncate collection records and indexes
+func Truncate(col *mongo.Collection, dropIndexes bool) error {
+	_, err := col.DeleteMany(context.Background(), bson.M{})
+	if err != nil {
+		return fmt.Errorf("truncate failed to delete all docs from %s: %w", col.Name(), err)
+	}
+
+	if dropIndexes {
+		_, err = col.Indexes().DropAll(context.Background(), nil)
+		if err != nil {
+			return fmt.Errorf("truncate failed to drop indexes on %s: %w", col.Name(), err)
+		}
+	}
+
+	return nil
 }

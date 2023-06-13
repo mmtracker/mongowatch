@@ -27,6 +27,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/mmtracker/mongowatch"
 )
@@ -42,13 +43,10 @@ type DocumentProcessor struct {
 
 var _ mongowatch.DocumentProcessor = (*DocumentProcessor)(nil)
 
-// ResumePrefix is the prefix for the resume collection name
-const ResumePrefix = "_resume_points"
-
 // NewDataProcessor creates a new DocumentProcessor
-func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, localDB *mongo.Database) *DocumentProcessor {
+func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, resumeSuffix string, localDB *mongo.Database) *DocumentProcessor {
 	resumeRepo := NewStreamResumeRepository(NewCollection(
-		targetCollectionName+ResumePrefix,
+		targetCollectionName+resumeSuffix,
 		localDB,
 	))
 
@@ -66,7 +64,7 @@ func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, loc
 // StartWithRetry starts the doc processor with a retry mechanism
 func (dp DocumentProcessor) StartWithRetry(duration time.Duration, actions mongowatch.CollectionWatcher) error {
 	op := func() error {
-		err := dp.Start(actions)
+		err := dp.Start(actions, "")
 		if err != nil {
 			log.Errorf("error while starting data processor: %v", err)
 		}
@@ -81,7 +79,7 @@ func (dp DocumentProcessor) StartWithRetry(duration time.Duration, actions mongo
 }
 
 // Start starts the doc processor
-func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher) error {
+func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
 	resumeTime, err := dp.resumeRepo.GetResumeTime()
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
@@ -97,24 +95,41 @@ func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher) error {
 
 		// TODO: maybe ce.FullDocument can be serialized into a struct directly
 		// easiest way to remap the document to a struct is with JSON marshalling
-		docBytes, err := json.Marshal(ce.FullDocument)
-		if err != nil {
-			return fmt.Errorf("failed to marshal event stream document: %w", err)
-		}
+		var docBytes []byte
+		var err error
 		if ce.OperationType == "insert" {
+			docBytes, err = json.Marshal(ce.FullDocument)
+			if err != nil {
+				return fmt.Errorf("failed to marshal event stream document: %w", err)
+			}
 			return actions.Insert(ctx, docBytes)
 		}
 		if ce.OperationType == "update" {
+			docBytes, err = json.Marshal(ce.FullDocument)
+			if err != nil {
+				return fmt.Errorf("failed to marshal event stream document: %w", err)
+			}
 			return actions.Update(ctx, docBytes)
 		}
 		if ce.OperationType == "delete" {
+			if ce.FullDocumentBeforeChange != nil {
+				docBytes, err = json.Marshal(ce.FullDocumentBeforeChange)
+				if err != nil {
+					return fmt.Errorf("failed to marshal event stream document before change: %w", err)
+				}
+			} else {
+				docBytes, err = json.Marshal(ce.FullDocument)
+				if err != nil {
+					return fmt.Errorf("failed to marshal event stream document: %w", err)
+				}
+			}
 			return actions.Delete(ctx, docBytes)
 		}
 
 		return nil
 	}
 
-	err = dp.manager.Watch(context.Background(), resumeTime, changeEventDispatcherFunc)
+	err = dp.manager.Watch(context.Background(), fullDocumentMode, resumeTime, changeEventDispatcherFunc)
 
 	return err
 }

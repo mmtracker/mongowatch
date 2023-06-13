@@ -54,11 +54,12 @@ var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
 // Start starts watching mongo's change stream for the collection and
 // if a valid timestamp is provided, the stream starts from that point
 // it processes events synchronously
-func (csw *ChangeStreamWatcher) Start(ctx context.Context, timestamp *primitive.Timestamp, saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc) error {
+func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc) error {
 	opts := options.ChangeStream().SetFullDocument(options.UpdateLookup)
 	if timestamp != nil {
 		log.Tracef("starting watcher from timestamp: %d", timestamp.T)
 		opts.SetStartAtOperationTime(timestamp)
+		opts.SetFullDocumentBeforeChange(fullDocumentMode)
 	} else {
 		log.Tracef("starting watcher without timestamp")
 	}
