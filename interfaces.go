@@ -59,7 +59,7 @@ type CollectionWatcher interface {
 
 // DocumentProcessor is an interface for processing document data from a change stream
 type DocumentProcessor interface {
-	StartWithRetry(duration time.Duration, actions CollectionWatcher) error
+	StartWithRetry(duration time.Duration, actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Start(actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Stop()
 }

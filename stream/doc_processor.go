@@ -62,9 +62,9 @@ func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, res
 }
 
 // StartWithRetry starts the doc processor with a retry mechanism
-func (dp DocumentProcessor) StartWithRetry(duration time.Duration, actions mongowatch.CollectionWatcher) error {
+func (dp DocumentProcessor) StartWithRetry(duration time.Duration, actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
 	op := func() error {
-		err := dp.Start(actions, "")
+		err := dp.Start(actions, fullDocumentMode)
 		if err != nil {
 			log.Errorf("error while starting data processor: %v", err)
 		}
