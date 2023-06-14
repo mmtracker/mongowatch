@@ -20,6 +20,7 @@ package stream
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
@@ -66,7 +67,16 @@ func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode opti
 
 	watchCursor, err := csw.col.Watch(ctx, buildPipeline(), opts)
 	if err != nil {
-		return fmt.Errorf("failed to watch collection: %w", err)
+		if strings.Contains(err.Error(), "NoMatchingDocument") {
+			log.Trace("NoMatchingDocument, falling back to fullDocumentMode options.Off")
+			opts.SetFullDocumentBeforeChange(options.Off)
+			watchCursor, err = csw.col.Watch(ctx, buildPipeline(), opts)
+			if err != nil {
+				return fmt.Errorf("failed to watch collection: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to watch collection: %w", err)
+		}
 	}
 
 	return csw.watchChangeStream(ctx, timestamp != nil, saveFunc, deleteFunc, watchCursor, dispatchFuncs)
