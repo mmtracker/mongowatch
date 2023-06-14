@@ -57,7 +57,7 @@ var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
 func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc) error {
 	opts := options.ChangeStream().SetFullDocument(options.UpdateLookup)
 	if timestamp != nil {
-		log.Tracef("starting watcher from timestamp: %d", timestamp.T)
+		log.Tracef("starting watcher from timestamp: %d in mode: %s", timestamp.T, fullDocumentMode)
 		opts.SetStartAtOperationTime(timestamp)
 		opts.SetFullDocumentBeforeChange(fullDocumentMode)
 	} else {
