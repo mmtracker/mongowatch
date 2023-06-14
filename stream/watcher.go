@@ -56,11 +56,13 @@ var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
 // if a valid timestamp is provided, the stream starts from that point
 // it processes events synchronously
 func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc) error {
-	opts := options.ChangeStream().SetFullDocument(options.UpdateLookup)
+	opts := options.ChangeStream()
+	opts.SetFullDocument(options.UpdateLookup)
+	opts.SetFullDocumentBeforeChange(options.Required)
+
 	if timestamp != nil {
 		log.Tracef("starting watcher from timestamp: %d in mode: %s", timestamp.T, fullDocumentMode)
 		opts.SetStartAtOperationTime(timestamp)
-		opts.SetFullDocumentBeforeChange(fullDocumentMode)
 	} else {
 		log.Tracef("starting watcher without timestamp")
 	}
@@ -68,7 +70,7 @@ func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode opti
 	watchCursor, err := csw.col.Watch(ctx, buildPipeline(), opts)
 	if err != nil {
 		if strings.Contains(err.Error(), "NoMatchingDocument") {
-			log.Trace("NoMatchingDocument, falling back to fullDocumentMode options.Off")
+			log.Errorf("NoMatchingDocument, falling back to fullDocumentMode options.Off: %s", err.Error())
 			opts.SetFullDocumentBeforeChange(options.Off)
 			watchCursor, err = csw.col.Watch(ctx, buildPipeline(), opts)
 			if err != nil {
@@ -208,6 +210,7 @@ func buildPipeline() mongo.Pipeline {
 					{Key: "collection", Value: 1},
 					{Key: "documentKey", Value: 1},
 					{Key: "fullDocument", Value: 1},
+					{Key: "fullDocumentBeforeChange", Value: 1},
 					{Key: "updateDescription", Value: 1},
 				},
 			},
