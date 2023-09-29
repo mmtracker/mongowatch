@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	log "github.com/sirupsen/logrus"
@@ -62,20 +61,18 @@ func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, res
 }
 
 // StartWithRetry starts the doc processor with a retry mechanism
-func (dp DocumentProcessor) StartWithRetry(duration time.Duration, actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
+func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
 	op := func() error {
 		err := dp.Start(actions, fullDocumentMode)
 		if err != nil {
 			log.Errorf("error while starting data processor: %v", err)
 		}
-		// TODO: add retry limit or exponential backoff
 		// TODO: increase error metrics to trigger notification to slack from victoria metrics via grafana
 		return err
 	}
 
 	// use exponential backoff not to spam the logs, implement notify on slack if some key error occurs
-	return backoff.Retry(op, backoff.NewExponentialBackOff())
-	// return backoff.Retry(op, backoff.NewConstantBackOff(duration))
+	return backoff.Retry(op, bo)
 }
 
 // Start starts the doc processor

@@ -19,8 +19,8 @@ package mongowatch
 
 import (
 	"context"
-	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -59,7 +59,7 @@ type CollectionWatcher interface {
 
 // DocumentProcessor is an interface for processing document data from a change stream
 type DocumentProcessor interface {
-	StartWithRetry(duration time.Duration, actions CollectionWatcher, fullDocumentMode options.FullDocument) error
+	StartWithRetry(bo backoff.BackOff, actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Start(actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Stop()
 }
