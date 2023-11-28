@@ -27,4 +27,4 @@ This package contains helper methods to do it (make sure you have the right perm
 To be able to run tests in this repo you will need to have some local and remote mongo instances running on port 27017.
 Configure parts with TODO comments.
 
-Courtesy of @ignasbernotas and @zolia
+Courtesy of [@ignasbernotas](https://github.com/ignasbernotas) and [@zolia](https://github.com/zolia)
