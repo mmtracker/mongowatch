@@ -96,9 +96,7 @@ func (csw *ChangeStreamWatcher) getWatchCursor(ctx context.Context, fullDocument
 	opts.SetFullDocument(options.UpdateLookup)
 	opts.SetFullDocumentBeforeChange(options.Required)
 
-	// since we don't store the resume point if it's the invalidate event
-	// we have to start from the next event
-	// but this fails, because the next event is the invalidate event
+	// when recovering from an invalidate event we need to start from the next event
 	if resumePoint != nil {
 		log.Tracef("starting watcher from resume point for op: %s", resumePoint.OperationType)
 		if resumePoint.OperationType == mongowatch.OperationTypeInvalidate {
