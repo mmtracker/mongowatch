@@ -52,7 +52,7 @@ func NewChangeStreamWatcher(col *mongo.Collection) *ChangeStreamWatcher {
 
 var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
 
-// Start starts watching mongo's change stream for the collection and
+// Start starts watching Mongo change stream for the collection and
 // if a valid timestamp is provided, the stream starts from that point
 // it processes events synchronously
 func (csw *ChangeStreamWatcher) Start(

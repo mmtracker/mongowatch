@@ -70,6 +70,10 @@ func (m *Manager) Watch(ctx context.Context, fullDocumentMode options.FullDocume
 		fn...,
 	)
 	if err != nil {
+		// enables graceful shutdown
+		if errors.Is(err, context.Canceled) {
+			return nil
+		}
 		return fmt.Errorf("failed to watch mongo stream: %w", err)
 	}
 
