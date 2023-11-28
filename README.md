@@ -4,14 +4,12 @@
 
 Watches target mongo collection using mongo event log and executes certain handlers based on subscribed collection changes.
 
-## Limitations
+# Self healing
+If the collection was renamed, dropped or recreated, the event stream produces an 'invalidate' event for which the watcher is implemented to recover automatically from.
 
-The watcher hangs when it receives an 'invalidate' event.
-If the collection was renamed, dropped or recreated, the watcher will not be able to recover.
+However make sure to reapply the collMod command options to the collection (if necessary).
 
-Once the collection is recreated, make sure to reapply the collMod command to the collection to re-enable the event log.
-
-This package contains helper methods to do it (make sure you have the right permissions):
+This package contains helper methods to do it (make sure you have the right Mongo user permissions):
 
 #### For Mongo >= 6.0
 `collMod` `changeStreamPreAndPostImages`
