@@ -29,8 +29,8 @@ import (
 // mongo's oplog has configurable expiration, but we don't need a large oplog
 // instead we store the changes we actually need
 type StreamResume interface {
-	// GetResumeToken fetches the last stored resume point and extracts the token
-	GetResumeToken() (*ResumeToken, error)
+	// GetResumePoint fetches the last stored resume point
+	GetResumePoint() (*ChangeStreamResumePoint, error)
 	// GetResumeTime fetches the last stored resume point and extracts the timestamp
 	GetResumeTime() (*primitive.Timestamp, error)
 	// DeleteResumePoint deletes a change stream resume point from the collection
@@ -47,7 +47,7 @@ type ChangeEventDispatcherFunc func(ctx context.Context, ce ChangeStreamEvent, e
 type ChangeStreamWatcher interface {
 	// Start resumes watching change events and
 	// passes event data to the supplied dispatch function for handling
-	Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc ChangeEventDispatcherFunc, dispatchFuncs ...ChangeEventDispatcherFunc) error
+	Start(ctx context.Context, fullDocumentMode options.FullDocument, resumePoint *ChangeStreamResumePoint, saveFunc, deleteFunc ChangeEventDispatcherFunc, dispatchFuncs ...ChangeEventDispatcherFunc) error
 }
 
 // CollectionWatcher is an interface for processing document data from a change stream

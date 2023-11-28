@@ -27,7 +27,13 @@ type ChangeStreamResumePoint struct {
 	Timestamp primitive.Timestamp `bson:"timestamp" json:"timestamp"`
 	// need to keep this for tests
 	FullDocument primitive.M `bson:"fullDocument" json:"fullDocument"`
+	// important to know before resuming the stream
+	// OperationType == 'invalidate' means that the resume point is no longer valid,
+	// and we need to use startAfter to resume the stream
+	OperationType string `bson:"operationType" json:"operationType"`
 }
+
+const OperationTypeInvalidate = "invalidate"
 
 // ChangeStreamEvent is the customized representation of a MongoDB change stream event that is captured and processed by
 // this application.

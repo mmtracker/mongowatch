@@ -65,6 +65,12 @@ func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatc
 	op := func() error {
 		err := dp.Start(actions, fullDocumentMode)
 		if err != nil {
+			if errors.Is(err, ErrInvalidate) {
+				// gracefully stop the stream manager
+				log.Tracef("stopping data processor due to invalidate event: %v", err)
+				log.Trace("restarting...")
+				dp.Stop()
+			}
 			log.Errorf("error while starting data processor: %v", err)
 		}
 		// TODO: increase error metrics to trigger notification to slack from victoria metrics via grafana
@@ -77,7 +83,7 @@ func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatc
 
 // Start starts the doc processor
 func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
-	resumeTime, err := dp.resumeRepo.GetResumeTime()
+	resumePoint, err := dp.resumeRepo.GetResumePoint()
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
 			return fmt.Errorf("failed to fetch mongo watcher resume token: %w", err)
@@ -123,12 +129,13 @@ func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocu
 			return actions.Delete(ctx, docBytes)
 		}
 
+		log.Tracef("skipping event: %d: %s", ce.Timestamp.T, ce.OperationType)
+
 		return nil
 	}
 
-	err = dp.manager.Watch(context.Background(), fullDocumentMode, resumeTime, changeEventDispatcherFunc)
-
-	return err
+	// start watching the change stream
+	return dp.manager.Watch(context.Background(), fullDocumentMode, resumePoint, changeEventDispatcherFunc)
 }
 
 // Stop stops the doc processor
