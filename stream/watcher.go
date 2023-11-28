@@ -19,12 +19,12 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -55,14 +55,59 @@ var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
 // Start starts watching mongo's change stream for the collection and
 // if a valid timestamp is provided, the stream starts from that point
 // it processes events synchronously
-func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode options.FullDocument, timestamp *primitive.Timestamp, saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc) error {
+func (csw *ChangeStreamWatcher) Start(
+	ctx context.Context,
+	fullDocumentMode options.FullDocument,
+	resumePoint *mongowatch.ChangeStreamResumePoint,
+	saveFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc,
+	dispatchFuncs ...mongowatch.ChangeEventDispatcherFunc,
+) error {
+	return csw.startWatcher(ctx, fullDocumentMode, resumePoint, saveFunc, deleteFunc, dispatchFuncs)
+}
+
+func (csw *ChangeStreamWatcher) startWatcher(ctx context.Context, fullDocumentMode options.FullDocument, resumePoint *mongowatch.ChangeStreamResumePoint, saveFunc mongowatch.ChangeEventDispatcherFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, dispatchFuncs []mongowatch.ChangeEventDispatcherFunc) error {
+	// we start a loop here to be able to restart the watcher on invalidate events
+	watchCursor, err := csw.getWatchCursor(ctx, fullDocumentMode, resumePoint)
+	if err != nil {
+		return err
+	}
+	err = csw.watchChangeStream(
+		ctx,
+		resumePoint,
+		saveFunc,
+		deleteFunc,
+		watchCursor,
+		dispatchFuncs,
+	)
+	if err != nil {
+		if errors.Is(err, ErrInvalidate) {
+			log.Tracef("received 'invalidate' event, restarting watcher")
+			// time.Sleep(10000 * time.Millisecond)
+			// continue
+		}
+		return fmt.Errorf("failed to watch change stream: %w", err)
+	}
+
+	return nil
+}
+
+func (csw *ChangeStreamWatcher) getWatchCursor(ctx context.Context, fullDocumentMode options.FullDocument, resumePoint *mongowatch.ChangeStreamResumePoint) (*mongo.ChangeStream, error) {
 	opts := options.ChangeStream()
 	opts.SetFullDocument(options.UpdateLookup)
 	opts.SetFullDocumentBeforeChange(options.Required)
 
-	if timestamp != nil {
-		log.Tracef("starting watcher from timestamp: %d in mode: %s", timestamp.T, fullDocumentMode)
-		opts.SetStartAtOperationTime(timestamp)
+	// since we don't store the resume point if it's the invalidate event
+	// we have to start from the next event
+	// but this fails, because the next event is the invalidate event
+	if resumePoint != nil {
+		log.Tracef("starting watcher from resume point for op: %s", resumePoint.OperationType)
+		if resumePoint.OperationType == mongowatch.OperationTypeInvalidate {
+			log.Tracef("starting watcher after resume point because of invalidate event: %s", resumePoint.ID)
+			opts.SetStartAfter(resumePoint.ID)
+		} else {
+			log.Tracef("starting watcher from timestamp: %d in mode: %s", resumePoint.Timestamp, fullDocumentMode)
+			opts.SetStartAtOperationTime(&resumePoint.Timestamp)
+		}
 	} else {
 		log.Tracef("starting watcher without timestamp")
 	}
@@ -74,24 +119,21 @@ func (csw *ChangeStreamWatcher) Start(ctx context.Context, fullDocumentMode opti
 			opts.SetFullDocumentBeforeChange(options.Off)
 			watchCursor, err = csw.col.Watch(ctx, buildPipeline(), opts)
 			if err != nil {
-				return fmt.Errorf("failed to watch collection: %w", err)
+				return nil, fmt.Errorf("failed to watch collection: %w", err)
 			}
 		} else {
-			return fmt.Errorf("failed to watch collection: %w", err)
+			return nil, fmt.Errorf("failed to watch collection: %w", err)
 		}
 	}
 
-	return csw.watchChangeStream(ctx, timestamp != nil, saveFunc, deleteFunc, watchCursor, dispatchFuncs)
+	log.Tracef("getWatchCursor: watch cursor: %+v", watchCursor.ResumeToken())
+
+	return watchCursor, nil
 }
 
-func (csw *ChangeStreamWatcher) watchChangeStream(
-	ctx context.Context,
-	resuming bool,
-	saveFunc mongowatch.ChangeEventDispatcherFunc,
-	deleteFunc mongowatch.ChangeEventDispatcherFunc,
-	watchCursor *mongo.ChangeStream,
-	dispatchFuncs []mongowatch.ChangeEventDispatcherFunc,
-) error {
+var ErrInvalidate = fmt.Errorf("received 'invalidate' event")
+
+func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeToken *mongowatch.ChangeStreamResumePoint, saveFunc mongowatch.ChangeEventDispatcherFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, watchCursor *mongo.ChangeStream, dispatchFuncs []mongowatch.ChangeEventDispatcherFunc) error {
 	defer watchCursor.Close(ctx)
 
 	log.Trace("mongo stream watcher launched, waiting for change events...")
@@ -99,33 +141,55 @@ func (csw *ChangeStreamWatcher) watchChangeStream(
 	var previousEvent *mongowatch.ChangeStreamEvent
 	// wait for the next change stream data to become available
 	for watchCursor.Next(ctx) {
-		event, err := csw.extractChangeEvent(watchCursor.Current)
+		// log.Tracef("received change event: %+v", watchCursor.Current)
+		changeEvent, err := csw.extractChangeEvent(watchCursor.Current)
 		if err != nil {
 			return fmt.Errorf("failed to extract change event: %w", err)
 		}
+		// log.Tracef("extracted change event: %+v", changeEvent)
+
+		// attempting to do the following here will fail
+		// if changeEvent.OperationType == mongowatch.OperationTypeInvalidate return ErrInvalidate
+		// the error will put the watcher into an infinite restart loop
+		// after the first restart we should continue and wait for the watchCursor.Next(ctx) to return
+		// but that's more difficult to implement
+
 		// when we resume we already have the last event stored
 		// so all we need to do is process
 		// we will leave the deletion to the next event, so we have a point to resume from
-		if previousEvent == nil && resuming {
+		if previousEvent == nil && resumeToken != nil {
+			log.Tracef("resuming watcher with no previous event: %+v", changeEvent)
 			for _, dispatchFunc := range dispatchFuncs {
 				// we pass the previous error to the next handler
 				// this way the last handler can do a cleanup
-				err = dispatchFunc(ctx, event, err)
+				err = dispatchFunc(ctx, changeEvent, err)
 			}
 			if err != nil {
 				return fmt.Errorf("failed to process first event: %w", err)
 			}
+			log.Tracef("resumed watcher from no event: %s", changeEvent.ID)
+
+			// watchCursor was started with an invalidate event
+			// we need to return the error to restart the watcher
+			if changeEvent.OperationType == mongowatch.OperationTypeInvalidate {
+				log.Tracef("received 'invalidate' event for: %s", changeEvent.Collection)
+				log.Tracef("returning error to restart the watcher and resume the next event from: %s", changeEvent.ID)
+
+				return ErrInvalidate
+			}
 
 			// consider this event processed
-			previousEvent = &event
+			previousEvent = &changeEvent
 			continue
 		}
 
 		// save event
-		err = saveFunc(ctx, event, nil)
+		err = saveFunc(ctx, changeEvent, nil)
 		if err != nil {
 			return fmt.Errorf("failed to save event: %w", err)
 		}
+
+		log.Tracef("saved event: %s", changeEvent.ID)
 
 		// the very first run (before we have events stored) will have previousEvent nil
 		if previousEvent != nil {
@@ -135,6 +199,7 @@ func (csw *ChangeStreamWatcher) watchChangeStream(
 			if err != nil {
 				return fmt.Errorf("failed to delete event: %w", err)
 			}
+			log.Tracef("deleted event: %s", previousEvent.ID)
 		}
 
 		// once the current event is stored and the previous event is deleted
@@ -142,13 +207,22 @@ func (csw *ChangeStreamWatcher) watchChangeStream(
 		for _, dispatchFunc := range dispatchFuncs {
 			// we pass the previous error to the next handler
 			// this way the last handler can do a cleanup
-			err = dispatchFunc(ctx, event, err)
+			err = dispatchFunc(ctx, changeEvent, err)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
 		}
 
-		previousEvent = &event
+		log.Tracef("processed event: %s", changeEvent.ID)
+
+		// 2nd case
+		if changeEvent.OperationType == mongowatch.OperationTypeInvalidate {
+			log.Tracef("received 'invalidate' event for: %s", changeEvent.Collection)
+			log.Tracef("returning error to restart the watcher and resume the next event from: %s", changeEvent.ID)
+			return ErrInvalidate
+		}
+
+		previousEvent = &changeEvent
 	}
 
 	return nil
@@ -156,7 +230,7 @@ func (csw *ChangeStreamWatcher) watchChangeStream(
 
 // extractChangeEvent transforms the raw data received from the MongoDB change stream to the ChangeStreamEvent type.
 func (csw *ChangeStreamWatcher) extractChangeEvent(rawChange bson.Raw) (mongowatch.ChangeStreamEvent, error) {
-	log.Tracef("received change event: %s", rawChange)
+	// log.Tracef("received change event: %s", rawChange)
 	var ce mongowatch.ChangeStreamEvent
 	err := bson.Unmarshal(rawChange, &ce)
 	if err != nil {

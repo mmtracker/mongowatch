@@ -38,9 +38,10 @@ func GetSaveResumePointFunc(streamResumeRepo mongowatch.StreamResume) mongowatch
 		// )
 		log.Tracef("saving resume point: %d", cse.Timestamp.T)
 		point := mongowatch.ChangeStreamResumePoint{
-			ID:           cse.ID,
-			Timestamp:    cse.Timestamp,
-			FullDocument: cse.FullDocument,
+			ID:            cse.ID,
+			Timestamp:     cse.Timestamp,
+			OperationType: cse.OperationType,
+			FullDocument:  cse.FullDocument,
 		}
 		savePtErr := streamResumeRepo.SaveResumePoint(ctx, point)
 		if savePtErr != nil {

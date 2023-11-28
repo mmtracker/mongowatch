@@ -51,15 +51,15 @@ func (csr *ResumeRepository) GetResumeTime() (*primitive.Timestamp, error) {
 	return &e.Timestamp, nil
 }
 
-// GetResumeToken returns the mongo stream token for the last change stream event that was recorded
+// GetResumePoint returns the mongo stream token for the last change stream event that was recorded
 // This may be used to resume change events from the point of the last change event, meaning last event will be skipped.
-func (csr *ResumeRepository) GetResumeToken() (*mongowatch.ResumeToken, error) {
+func (csr *ResumeRepository) GetResumePoint() (*mongowatch.ChangeStreamResumePoint, error) {
 	e, err := csr.GetLastResumePoint()
 	if err != nil {
 		return nil, err
 	}
 
-	return &e.ID, nil
+	return e, nil
 }
 
 // Count returns the total doc count

@@ -26,7 +26,6 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -172,7 +171,7 @@ func Test_Manager_ResumesWithTimestamp(t *testing.T) {
 	wg.Add(eventCount + 1)
 
 	insertDocumentsAsync(t, watchableCollection, eventCount, eventCount)
-	runWatchAsync(watchManager, &events[0].Timestamp, handlerFunc(wg))
+	runWatchAsync(watchManager, events[0], handlerFunc(wg))
 
 	log.Tracef("waiting again")
 	wg.Wait()
@@ -197,10 +196,10 @@ func handlerFunc(wg *sync.WaitGroup) func(ctx context.Context, ce mongowatch.Cha
 	}
 }
 
-func runWatchAsync(watchManager *Manager, tm *primitive.Timestamp, dispatcherFunc mongowatch.ChangeEventDispatcherFunc) {
+func runWatchAsync(watchManager *Manager, rp *mongowatch.ChangeStreamResumePoint, dispatcherFunc mongowatch.ChangeEventDispatcherFunc) {
 	go func() {
 		log.Tracef("starting watch in a routine")
-		err := watchManager.Watch(context.Background(), options.Off, tm, dispatcherFunc)
+		err := watchManager.Watch(context.Background(), options.Off, rp, dispatcherFunc)
 		if err != nil {
 			log.Errorf("watcher error: %s", err.Error())
 		}
