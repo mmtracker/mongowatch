@@ -43,7 +43,7 @@ type DocumentProcessor struct {
 var _ mongowatch.DocumentProcessor = (*DocumentProcessor)(nil)
 
 // NewDataProcessor creates a new DocumentProcessor
-func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, resumeSuffix string, localDB *mongo.Database) *DocumentProcessor {
+func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, resumeSuffix string, localDB *mongo.Database, watcherOpts ...Option) *DocumentProcessor {
 	resumeRepo := NewStreamResumeRepository(NewCollection(
 		targetCollectionName+resumeSuffix,
 		localDB,
@@ -53,7 +53,7 @@ func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, res
 		resumeRepo: resumeRepo,
 		manager: NewManager(
 			resumeRepo,
-			NewChangeStreamWatcher(NewCollection(targetCollectionName, targetDB)),
+			NewChangeStreamWatcher(NewCollection(targetCollectionName, targetDB), watcherOpts...),
 			GetSaveResumePointFunc(resumeRepo),
 			GetDeleteResumePointFunc(resumeRepo),
 		),
