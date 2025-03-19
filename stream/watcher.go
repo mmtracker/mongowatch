@@ -40,14 +40,33 @@ func NewCollection(col string, mongoInstance *mongo.Database) *mongo.Collection 
 	return collection
 }
 
+// Option is a functional option for the ChangeStreamWatcher
+type Option func(*ChangeStreamWatcher)
+
 // ChangeStreamWatcher watches a mongo change stream for change events and reacts to those events.
 type ChangeStreamWatcher struct {
 	col *mongo.Collection
+
+	resumeOnChangeStreamHistoryLost bool
+}
+
+// WithResumeOnChangeStreamHistoryLost will allow the watcher to resume the change stream
+// when the history is lost. This can happen when the oplog is full.
+func WithResumeOnChangeStreamHistoryLost(in bool) Option {
+	return func(csw *ChangeStreamWatcher) {
+		csw.resumeOnChangeStreamHistoryLost = in
+	}
 }
 
 // NewChangeStreamWatcher builds a new mongo watcher instance
-func NewChangeStreamWatcher(col *mongo.Collection) *ChangeStreamWatcher {
-	return &ChangeStreamWatcher{col: col}
+func NewChangeStreamWatcher(col *mongo.Collection, opts ...Option) *ChangeStreamWatcher {
+	watcher := &ChangeStreamWatcher{col: col}
+
+	for _, opt := range opts {
+		opt(watcher)
+	}
+
+	return watcher
 }
 
 var _ mongowatch.ChangeStreamWatcher = (*ChangeStreamWatcher)(nil)
@@ -115,6 +134,17 @@ func (csw *ChangeStreamWatcher) getWatchCursor(ctx context.Context, fullDocument
 		if strings.Contains(err.Error(), "NoMatchingDocument") {
 			log.Errorf("NoMatchingDocument, falling back to fullDocumentMode options.Off: %s", err.Error())
 			opts.SetFullDocumentBeforeChange(options.Off)
+			watchCursor, err = csw.col.Watch(ctx, buildPipeline(), opts)
+			if err != nil {
+				return nil, fmt.Errorf("failed to watch collection: %w", err)
+			}
+		} else if strings.Contains(err.Error(), "ChangeStreamHistoryLost") && csw.resumeOnChangeStreamHistoryLost {
+			log.Errorf("ChangeStreamHistoryLost, restarting change stream without a resume point: %s", err.Error())
+
+			// avoid recursively calling getWatchCursor, retry with no resume point instead.
+			opts := options.ChangeStream()
+			opts.SetFullDocument(options.UpdateLookup)
+			opts.SetFullDocumentBeforeChange(options.Required)
 			watchCursor, err = csw.col.Watch(ctx, buildPipeline(), opts)
 			if err != nil {
 				return nil, fmt.Errorf("failed to watch collection: %w", err)
