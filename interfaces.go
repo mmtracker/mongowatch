@@ -62,4 +62,5 @@ type DocumentProcessor interface {
 	StartWithRetry(bo backoff.BackOff, actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Start(actions CollectionWatcher, fullDocumentMode options.FullDocument) error
 	Stop()
+	OnStartErr() <-chan error
 }

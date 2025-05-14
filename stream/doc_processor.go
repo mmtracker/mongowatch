@@ -38,6 +38,8 @@ import (
 type DocumentProcessor struct {
 	manager    *Manager
 	resumeRepo mongowatch.StreamResume
+
+	onStartErrChans []chan error
 }
 
 var _ mongowatch.DocumentProcessor = (*DocumentProcessor)(nil)
@@ -60,8 +62,26 @@ func NewDataProcessor(targetDB *mongo.Database, targetCollectionName string, res
 	}
 }
 
+// OnStartErr returns a new channel for receiving errors on start
+func (dp *DocumentProcessor) OnStartErr() <-chan error {
+	ch := make(chan error)
+	dp.onStartErrChans = append(dp.onStartErrChans, ch)
+	return ch
+}
+
+// notifyOnStartErr notifies all channels on start error
+func (dp *DocumentProcessor) notifyOnStartErr(err error) {
+	for _, ch := range dp.onStartErrChans {
+		select {
+		case ch <- err:
+		default:
+			log.Errorf("failed to send error to channel: %v", err)
+		}
+	}
+}
+
 // StartWithRetry starts the doc processor with a retry mechanism
-func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
+func (dp *DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
 	op := func() error {
 		err := dp.Start(actions, fullDocumentMode)
 		if err != nil {
@@ -72,8 +92,8 @@ func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatc
 				dp.Stop()
 			}
 			log.Errorf("error while starting data processor: %v", err)
+			dp.notifyOnStartErr(err)
 		}
-		// TODO: increase error metrics to trigger notification to slack from victoria metrics via grafana
 		return err
 	}
 
@@ -82,7 +102,7 @@ func (dp DocumentProcessor) StartWithRetry(bo backoff.BackOff, actions mongowatc
 }
 
 // Start starts the doc processor
-func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
+func (dp *DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocumentMode options.FullDocument) error {
 	resumePoint, err := dp.resumeRepo.GetResumePoint()
 	if err != nil {
 		if !errors.Is(err, mongo.ErrNoDocuments) {
@@ -139,6 +159,10 @@ func (dp DocumentProcessor) Start(actions mongowatch.CollectionWatcher, fullDocu
 }
 
 // Stop stops the doc processor
-func (dp DocumentProcessor) Stop() {
+func (dp *DocumentProcessor) Stop() {
 	dp.manager.Stop()
+
+	for _, v := range dp.onStartErrChans {
+		close(v)
+	}
 }
