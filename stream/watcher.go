@@ -21,10 +21,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -187,6 +189,15 @@ func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeTok
 		// we will leave the deletion to the next event, so we have a point to resume from
 		if previousEvent == nil && resumeToken != nil {
 			log.Tracef("resuming watcher with no previous event: %+v", changeEvent)
+
+			if !changeEvent.IsInvalidate() && csw.areFullDocumentsEqual(resumeToken.FullDocument, changeEvent.FullDocument) {
+				// This document has already been processed, since we have it in our database.
+				// consider this event processed
+				log.Infof("skipping event as it's already processed: %s", changeEvent.ID)
+				previousEvent = &changeEvent
+				continue
+			}
+
 			for _, dispatchFunc := range dispatchFuncs {
 				// we pass the previous error to the next handler
 				// this way the last handler can do a cleanup
@@ -199,7 +210,7 @@ func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeTok
 
 			// watchCursor was started with an invalidate event
 			// we need to return the error to restart the watcher
-			if changeEvent.OperationType == mongowatch.OperationTypeInvalidate {
+			if changeEvent.IsInvalidate() {
 				log.Tracef("received 'invalidate' event for: %s", changeEvent.Collection)
 				log.Tracef("returning error to restart the watcher and resume the next event from: %s", changeEvent.ID)
 
@@ -254,6 +265,10 @@ func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeTok
 	}
 
 	return nil
+}
+
+func (csw *ChangeStreamWatcher) areFullDocumentsEqual(a, b primitive.M) bool {
+	return reflect.DeepEqual(a, b)
 }
 
 // extractChangeEvent transforms the raw data received from the MongoDB change stream to the ChangeStreamEvent type.

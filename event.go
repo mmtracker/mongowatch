@@ -57,6 +57,11 @@ type ChangeStreamEvent struct {
 	} `bson:"updateDescription" json:"updateDescription"`
 }
 
+// IsInvalidate checks if the change stream event is an invalidate event.
+func (cse ChangeStreamEvent) IsInvalidate() bool {
+	return cse.OperationType == OperationTypeInvalidate
+}
+
 // ResumeToken denotes the token associated with a MongoDB change stream event, which may be used to resume receiving change stream events from
 // a point in the past.
 type ResumeToken struct {
