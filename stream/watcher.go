@@ -253,7 +253,7 @@ func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeTok
 		previousEvent = &changeEvent
 	}
 
-	return nil
+	return watchCursor.Err()
 }
 
 // extractChangeEvent transforms the raw data received from the MongoDB change stream to the ChangeStreamEvent type.
