@@ -86,3 +86,36 @@ func TestExtractChangeEventRejectsMalformedBSON(t *testing.T) {
 		t.Fatal("malformed event was silently accepted")
 	}
 }
+
+func TestExtractChangeEventObjectIDDocumentKeyCompatibility(t *testing.T) {
+	objectID := bson.ObjectID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	for _, test := range []struct {
+		name string
+		key  any
+		want string
+	}{
+		{"native ObjectID", objectID, objectID.Hex()},
+		{"custom string", "device-custom", "device-custom"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw, err := bson.Marshal(bson.M{
+				"_id":          bson.M{"_data": "saved-token"},
+				"documentKey":  test.key,
+				"fullDocument": bson.M{"nested_id": objectID},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			event, err := (&ChangeStreamWatcher{}).extractChangeEvent(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if event.DocumentKey != test.want {
+				t.Fatalf("document key changed: %q", event.DocumentKey)
+			}
+			if value, ok := event.FullDocument["nested_id"].(bson.ObjectID); !ok || value != objectID {
+				t.Fatalf("ObjectID in an untyped document changed: %#v", event.FullDocument)
+			}
+		})
+	}
+}

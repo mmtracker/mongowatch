@@ -266,6 +266,8 @@ func (csw *ChangeStreamWatcher) extractChangeEvent(rawChange bson.Raw) (mongowat
 	decoder := bson.NewDecoder(bson.NewDocumentReader(bytes.NewReader(rawChange)))
 	// Preserve v1's nested map representation for watcher callbacks and JSON.
 	decoder.DefaultDocumentM()
+	// Preserve v1's hex conversion for native ObjectID keys in the public string field.
+	decoder.ObjectIDAsHexString()
 	err := decoder.Decode(&ce)
 	if err != nil {
 		return ce, fmt.Errorf("failed to unmarshal change event: %w", err)
