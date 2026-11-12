@@ -26,14 +26,15 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/mmtracker/mongowatch"
 	"github.com/mmtracker/mongowatch/db"
 )
 
 func Test_Manager_ProcessesAndDeletesMessages_ExceptLast(t *testing.T) {
+	requireMongoIntegration(t)
 	watchManager, streamResumeRepo, watchableCollection, cleanup := buildManager()
 	defer cleanup()
 
@@ -59,6 +60,7 @@ func Test_Manager_ProcessesAndDeletesMessages_ExceptLast(t *testing.T) {
 }
 
 func Test_Manager_FailsOnError(t *testing.T) {
+	requireMongoIntegration(t)
 	watchManager, streamResumeRepo, watchableCollection, cleanup := buildManager()
 	defer cleanup()
 
@@ -93,6 +95,7 @@ func Test_Manager_FailsOnError(t *testing.T) {
 }
 
 func Test_Manager_Resumes(t *testing.T) {
+	requireMongoIntegration(t)
 	watchManager, streamResumeRepo, watchableCollection, cleanup := buildManager()
 	defer cleanup()
 
@@ -141,6 +144,7 @@ func Test_Manager_Resumes(t *testing.T) {
 }
 
 func Test_Manager_ResumesWithTimestamp(t *testing.T) {
+	requireMongoIntegration(t)
 	watchManager, streamResumeRepo, watchableCollection, cleanup := buildManager()
 	defer cleanup()
 

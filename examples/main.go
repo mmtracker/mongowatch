@@ -19,7 +19,7 @@ package main
 
 import (
 	log "github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/mmtracker/mongowatch/db"
 	"github.com/mmtracker/mongowatch/db/tx"

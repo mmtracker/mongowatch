@@ -12,8 +12,9 @@ package tx
 import (
 	"testing"
 
+	"context"
+
 	log "github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func TestMongoExecutor_WithTransaction(t *testing.T) {
@@ -21,7 +22,7 @@ func TestMongoExecutor_WithTransaction(t *testing.T) {
 		Client: mongoTestsDB.Client(),
 	}
 
-	callback := func(ctx mongo.SessionContext) (interface{}, error) {
+	callback := func(ctx context.Context) (interface{}, error) {
 		log.Info("db tx insert called")
 		return nil, nil
 	}

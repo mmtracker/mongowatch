@@ -25,13 +25,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"github.com/mmtracker/mongowatch/db"
 	"github.com/mmtracker/mongowatch/examples/watchers"
 )
 
 func Test_DocumentProcessor_Start(t *testing.T) {
+	requireMongoIntegration(t)
 	tests := []struct {
 		name    string
 		want    interface{}

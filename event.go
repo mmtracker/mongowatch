@@ -18,38 +18,39 @@
 package mongowatch
 
 import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // ChangeStreamResumePoint holds information needed to resume a change stream from a specific point
 type ChangeStreamResumePoint struct {
-	ID        ResumeToken         `bson:"_id" json:"_id"`
-	Timestamp primitive.Timestamp `bson:"timestamp" json:"timestamp"`
+	ID        ResumeToken    `bson:"_id" json:"_id"`
+	Timestamp bson.Timestamp `bson:"timestamp" json:"timestamp"`
 	// need to keep this for tests
-	FullDocument primitive.M `bson:"fullDocument" json:"fullDocument"`
+	FullDocument bson.M `bson:"fullDocument" json:"fullDocument"`
 	// important to know before resuming the stream
 	// OperationType == 'invalidate' means that the resume point is no longer valid,
 	// and we need to use startAfter to resume the stream
 	OperationType string `bson:"operationType" json:"operationType"`
 }
 
+// OperationTypeInvalidate identifies a collection invalidation change event.
 const OperationTypeInvalidate = "invalidate"
 
 // ChangeStreamEvent is the customized representation of a MongoDB change stream event that is captured and processed by
 // this application.
 type ChangeStreamEvent struct {
-	ID            ResumeToken         `bson:"_id" json:"_id"`
-	User          string              `bson:"user" json:"user"`
-	Timestamp     primitive.Timestamp `bson:"timestamp" json:"timestamp"`
-	OperationType string              `bson:"operationType" json:"operationType"`
-	Database      string              `bson:"database" json:"database"`
-	Collection    string              `bson:"collection" json:"collection"`
+	ID            ResumeToken    `bson:"_id" json:"_id"`
+	User          string         `bson:"user" json:"user"`
+	Timestamp     bson.Timestamp `bson:"timestamp" json:"timestamp"`
+	OperationType string         `bson:"operationType" json:"operationType"`
+	Database      string         `bson:"database" json:"database"`
+	Collection    string         `bson:"collection" json:"collection"`
 	// DocumentKey is the unique identifier for the document that was changed
 	// (e.g. the _id field for a document)
 	// some of our collections use custom IDs therefore it doesn't fit into the primitive.ObjectID type
-	DocumentKey              string      `bson:"documentKey" json:"documentKey"`
-	FullDocument             primitive.M `bson:"fullDocument" json:"fullDocument"`
-	FullDocumentBeforeChange primitive.M `bson:"fullDocumentBeforeChange" json:"fullDocumentBeforeChange"`
+	DocumentKey              string `bson:"documentKey" json:"documentKey"`
+	FullDocument             bson.M `bson:"fullDocument" json:"fullDocument"`
+	FullDocumentBeforeChange bson.M `bson:"fullDocumentBeforeChange" json:"fullDocumentBeforeChange"`
 	// TODO: get previous field values e.g. paidUntil
 	UpdateDescription struct {
 		UpdatedFields map[string]interface{} `bson:"updatedFields" json:"updatedFields"`

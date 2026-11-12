@@ -23,7 +23,6 @@ import (
 	"fmt"
 
 	log "github.com/sirupsen/logrus"
-	mongoDriver "go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/mmtracker/mongowatch"
 	"github.com/mmtracker/mongowatch/db/tx"
@@ -83,7 +82,7 @@ func (s SomeCollectionWatcher) Delete(ctx context.Context, doc []byte) error {
 		return fmt.Errorf("collection watcher delete: failed to unmarshal collection: %w", err)
 	}
 
-	err = s.executor.WithTransaction(func(sessCtx mongoDriver.SessionContext) (interface{}, error) {
+	err = s.executor.WithTransaction(func(sessCtx context.Context) (interface{}, error) {
 		// TODO: delete some state using sessCtx from local DB
 		return nil, nil
 	})

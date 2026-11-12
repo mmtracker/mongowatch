@@ -23,7 +23,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // Executor database transaction executor
@@ -42,7 +42,7 @@ func NewMongoExecutor(client *mongo.Client) *MongoExecutor {
 }
 
 // Callback describes callback accepted by session.WithTransaction
-type Callback func(sessCtx mongo.SessionContext) (interface{}, error)
+type Callback func(sessCtx context.Context) (interface{}, error)
 
 // WithTransaction execute callback within transaction
 func (e *MongoExecutor) WithTransaction(callback Callback) error {

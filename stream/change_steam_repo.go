@@ -21,10 +21,10 @@ import (
 	"context"
 	"fmt"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/mmtracker/mongowatch"
 )
@@ -42,7 +42,7 @@ func NewStreamResumeRepository(col *mongo.Collection) *ResumeRepository {
 }
 
 // GetResumeTime returns the mongo stream timestamp for the last change stream event that was recorded
-func (csr *ResumeRepository) GetResumeTime() (*primitive.Timestamp, error) {
+func (csr *ResumeRepository) GetResumeTime() (*bson.Timestamp, error) {
 	e, err := csr.GetLastResumePoint()
 	if err != nil {
 		return nil, err
@@ -89,10 +89,9 @@ func (csr *ResumeRepository) FetchAll() ([]*mongowatch.ChangeStreamResumePoint, 
 
 // GetLastResumePoint returns the last resumption point
 func (csr *ResumeRepository) GetLastResumePoint() (*mongowatch.ChangeStreamResumePoint, error) {
-	var opts options.FindOneOptions
-	opts.Sort = map[string]int{"timestamp": -1}
+	opts := options.FindOne().SetSort(bson.D{{Key: "timestamp", Value: -1}})
 	ctx := context.Background()
-	result := csr.col.FindOne(ctx, bson.D{}, &opts)
+	result := csr.col.FindOne(ctx, bson.D{}, opts)
 
 	var event *mongowatch.ChangeStreamResumePoint
 	err := result.Decode(&event)
@@ -116,7 +115,7 @@ func (csr *ResumeRepository) DeleteResumePoint(ctx context.Context, token mongow
 func (csr *ResumeRepository) SaveResumePoint(ctx context.Context, ce mongowatch.ChangeStreamResumePoint) error {
 	filter := bson.D{{Key: "_id", Value: ce.ID}}
 	update := bson.M{"$set": ce}
-	_, err := csr.col.UpdateOne(ctx, filter, update, options.Update().SetUpsert(true))
+	_, err := csr.col.UpdateOne(ctx, filter, update, options.UpdateOne().SetUpsert(true))
 	if err != nil {
 		return fmt.Errorf("failed to save resume point: %w", err)
 	}

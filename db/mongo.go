@@ -25,27 +25,22 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // ConnectToMongo helper to connect and setup  mongo DB
 func ConnectToMongo(dbName string, connectURL string) *mongo.Database {
-	log.Printf("connecting to MongoDB: %s", connectURL)
+	log.Info("connecting to MongoDB")
 
 	// Create MongoDB client
-	opts := options.Client().ApplyURI(connectURL)
+	opts := options.Client().SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true}).ApplyURI(connectURL)
 	opts.SetServerSelectionTimeout(10 * time.Second)
 
-	client, err := mongo.NewClient(opts)
+	client, err := mongo.Connect(opts)
 	if err != nil {
 		log.Fatalf("failed to create new MongoDB client: %#v", err)
-	}
-
-	// Connect client
-	if err = client.Connect(context.Background()); err != nil {
-		log.Fatalf("failed to connect to MongoDB: %#v", err)
 	}
 
 	err = client.Ping(context.Background(), nil)
@@ -67,7 +62,7 @@ func Truncate(col *mongo.Collection, dropIndexes bool) error {
 	}
 
 	if dropIndexes {
-		_, err = col.Indexes().DropAll(context.Background(), nil)
+		err = col.Indexes().DropAll(context.Background())
 		if err != nil {
 			return fmt.Errorf("truncate failed to drop indexes on %s: %w", col.Name(), err)
 		}

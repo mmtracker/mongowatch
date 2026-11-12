@@ -18,16 +18,17 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/mongo/writeconcern"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo/writeconcern"
 
 	"github.com/mmtracker/mongowatch"
 )
@@ -35,7 +36,7 @@ import (
 // NewCollection returns a new collection
 func NewCollection(col string, mongoInstance *mongo.Database) *mongo.Collection {
 	collection := mongoInstance.Collection(col,
-		options.Collection().SetWriteConcern(writeconcern.New(writeconcern.W(1), writeconcern.J(false))),
+		options.Collection().SetWriteConcern(&writeconcern.WriteConcern{W: 1, Journal: new(bool)}),
 	)
 	return collection
 }
@@ -159,6 +160,8 @@ func (csw *ChangeStreamWatcher) getWatchCursor(ctx context.Context, fullDocument
 	return watchCursor, nil
 }
 
+// ErrInvalidate signals that the watched collection was invalidated and the
+// processor must restart from its persisted invalidation resume point.
 var ErrInvalidate = fmt.Errorf("received 'invalidate' event")
 
 func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeToken *mongowatch.ChangeStreamResumePoint, saveFunc mongowatch.ChangeEventDispatcherFunc, deleteFunc mongowatch.ChangeEventDispatcherFunc, watchCursor *mongo.ChangeStream, dispatchFuncs []mongowatch.ChangeEventDispatcherFunc) error {
@@ -260,7 +263,10 @@ func (csw *ChangeStreamWatcher) watchChangeStream(ctx context.Context, resumeTok
 func (csw *ChangeStreamWatcher) extractChangeEvent(rawChange bson.Raw) (mongowatch.ChangeStreamEvent, error) {
 	// log.Tracef("received change event: %s", rawChange)
 	var ce mongowatch.ChangeStreamEvent
-	err := bson.Unmarshal(rawChange, &ce)
+	decoder := bson.NewDecoder(bson.NewDocumentReader(bytes.NewReader(rawChange)))
+	// Preserve v1's nested map representation for watcher callbacks and JSON.
+	decoder.DefaultDocumentM()
+	err := decoder.Decode(&ce)
 	if err != nil {
 		return ce, fmt.Errorf("failed to unmarshal change event: %w", err)
 	}
