@@ -21,8 +21,8 @@ import (
 	"context"
 
 	"github.com/cenkalti/backoff/v4"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // StreamResume stores relevant change stream events
@@ -32,7 +32,7 @@ type StreamResume interface {
 	// GetResumePoint fetches the last stored resume point
 	GetResumePoint() (*ChangeStreamResumePoint, error)
 	// GetResumeTime fetches the last stored resume point and extracts the timestamp
-	GetResumeTime() (*primitive.Timestamp, error)
+	GetResumeTime() (*bson.Timestamp, error)
 	// DeleteResumePoint deletes a change stream resume point from the collection
 	DeleteResumePoint(ctx context.Context, token ResumeToken) error
 	// SaveResumePoint stores ChangeStreamResumePoint

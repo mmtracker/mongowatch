@@ -19,82 +19,187 @@ package stream
 
 import (
 	"context"
-	"sync"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
-	"github.com/mmtracker/mongowatch/db"
-	"github.com/mmtracker/mongowatch/examples/watchers"
+	"github.com/mmtracker/mongowatch"
 )
 
 func Test_DocumentProcessor_Start(t *testing.T) {
-	tests := []struct {
-		name    string
-		want    interface{}
-		wantErr error
-	}{
-		{
-			name:    "data processing on the same connection with mock",
-			wantErr: nil,
-		},
-	}
-
-	const colName = "fake_sims"
-	col := NewCollection(colName, mongoTestsDB)
-	resumeCol := NewCollection(colName+"_resume_suffix_in_test", mongoTestsDB)
-	db.Truncate(col, true)
-	db.Truncate(resumeCol, true)
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			records := 5
-			actions := 3 // insert, update, delete
-			wg := sync.WaitGroup{}
-			wg.Add(records * actions)
-			mock := watchers.Mock{Limit: records, Wg: &wg}
-			dp := NewDataProcessor(mongoTestsDB, colName, "", mongoTestsDB)
-
-			// start data processor in the bg
-			go func() {
-				err := dp.Start(&mock, "")
-				if err != nil {
-					log.Error(err)
-				}
-				assert.NoError(t, err)
-			}()
-			time.Sleep(time.Millisecond * 100)
-			// insert records in the bg
-			go func() {
-				for i := 0; i < records; i++ {
-					log.Tracef("inserting record: %d", i+1)
-					res, err := col.InsertOne(context.Background(), map[string]interface{}{"test": "test"})
-					assert.NoError(t, err)
-					log.Tracef("inserted record: %s", res.InsertedID)
-					filter := bson.D{{Key: "_id", Value: res.InsertedID}}
-
-					log.Tracef("updating record: %d", i+1)
-					update := bson.M{"$set": map[string]interface{}{"test": "testas"}}
-					upRes, err := col.UpdateOne(context.Background(), filter, update)
-					assert.NoError(t, err)
-					log.Tracef("updated record: %#v", upRes)
-
-					delRes, err := col.DeleteOne(context.Background(), filter)
-					assert.NoError(t, err)
-					log.Tracef("deleted record: %s: %#v", res.InsertedID, delRes)
-				}
-
-				log.Trace("inserted records")
-			}()
-
-			wg.Wait()
-
-			assert.Equal(t, records, mock.Inserted)
-			assert.Equal(t, records, mock.Updated)
-			assert.Equal(t, records, mock.Deleted)
+	requireMongoIntegration(t)
+	t.Run("data processing on the same connection with mock", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		const records = 5
+		const resumeSuffix = "_resume"
+		colName := "processor_" + bson.NewObjectID().Hex()
+		col := NewCollection(colName, mongoTestsDB)
+		resumeCol := NewCollection(colName+resumeSuffix, mongoTestsDB)
+		if err := mongoTestsDB.CreateCollection(ctx, colName,
+			options.CreateCollection().SetChangeStreamPreAndPostImages(bson.M{"enabled": true})); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cleanupCancel()
+			if err := col.Drop(cleanupCtx); err != nil {
+				t.Error(err)
+			}
+			if err := resumeCol.Drop(cleanupCtx); err != nil {
+				t.Error(err)
+			}
 		})
+
+		processor := NewDataProcessor(mongoTestsDB, colName, resumeSuffix, mongoTestsDB)
+		// Seed a timestamp so fixture writes cannot race the opening of the cursor.
+		var hello struct {
+			OperationTime bson.Timestamp `bson:"operationTime"`
+		}
+		if err := mongoTestsDB.RunCommand(ctx, bson.D{{Key: "hello", Value: 1}}).Decode(&hello); err != nil {
+			t.Fatal(err)
+		}
+		if hello.OperationTime.T == 0 {
+			t.Fatal("sandbox did not return an operation timestamp")
+		}
+		if err := processor.resumeRepo.SaveResumePoint(ctx, mongowatch.ChangeStreamResumePoint{
+			ID: mongowatch.ResumeToken{TokenData: "fixture-start"}, Timestamp: hello.OperationTime,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		ready := make(chan struct{})
+		processor.manager.watcher = &documentProcessorReadyWatcher{processor.manager.watcher, ready}
+		callbacks := &documentProcessorCallbacks{events: make(chan documentProcessorEvent, records*3)}
+		done := make(chan struct{})
+		var startErr error
+		go func() {
+			startErr = processor.Start(callbacks, options.UpdateLookup)
+			close(done)
+		}()
+		stopped := false
+		stop := func() {
+			if stopped {
+				return
+			}
+			stopped = true
+			// Joining the worker precedes collection cleanup and test completion.
+			select {
+			case <-ready:
+				processor.Stop()
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Error("processor did not initialize or exit")
+				return
+			}
+			select {
+			case <-done:
+				if startErr != nil {
+					t.Errorf("processor exited: %v", startErr)
+				}
+			case <-time.After(5 * time.Second):
+				t.Error("processor did not stop")
+			}
+		}
+		t.Cleanup(stop)
+
+		counts := map[string]int{}
+		expect := func(operation string, id bson.ObjectID, value string) {
+			t.Helper()
+			select {
+			case event := <-callbacks.events:
+				var document struct {
+					ID    string `json:"_id"`
+					Value string `json:"test"`
+				}
+				if err := json.Unmarshal(event.document, &document); err != nil {
+					t.Fatal(err)
+				}
+				if event.operation != operation || document.ID != id.Hex() || document.Value != value {
+					t.Fatalf("unexpected %s callback: operation=%s document=%s", operation, event.operation, event.document)
+				}
+				counts[operation]++
+			case <-done:
+				t.Fatalf("processor exited before %s callback: %v", operation, startErr)
+			case <-ctx.Done():
+				t.Fatalf("wait for %s callback: %v", operation, ctx.Err())
+			}
+		}
+		for range records {
+			id := bson.NewObjectID()
+			if _, err := col.InsertOne(ctx, bson.M{"_id": id, "test": "inserted"}); err != nil {
+				t.Fatal(err)
+			}
+			expect("insert", id, "inserted")
+			if _, err := col.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"test": "updated"}}); err != nil {
+				t.Fatal(err)
+			}
+			expect("update", id, "updated")
+			if _, err := col.DeleteOne(ctx, bson.M{"_id": id}); err != nil {
+				t.Fatal(err)
+			}
+			expect("delete", id, "updated") // The deleted document must come from its pre-image.
+		}
+		stop()
+		for _, operation := range []string{"insert", "update", "delete"} {
+			if counts[operation] != records {
+				t.Errorf("%s callbacks: got %d, want %d", operation, counts[operation], records)
+			}
+		}
+		select {
+		case event := <-callbacks.events:
+			t.Errorf("unexpected extra %s callback", event.operation)
+		default:
+		}
+	})
+}
+
+type documentProcessorEvent struct {
+	operation string
+	document  []byte
+}
+
+type documentProcessorCallbacks struct {
+	events chan documentProcessorEvent
+}
+
+// Insert records a fixture insert callback.
+func (c *documentProcessorCallbacks) Insert(ctx context.Context, document []byte) error {
+	return c.record(ctx, "insert", document)
+}
+
+// Update records a fixture update callback.
+func (c *documentProcessorCallbacks) Update(ctx context.Context, document []byte) error {
+	return c.record(ctx, "update", document)
+}
+
+// Delete records a fixture delete callback.
+func (c *documentProcessorCallbacks) Delete(ctx context.Context, document []byte) error {
+	return c.record(ctx, "delete", document)
+}
+
+func (c *documentProcessorCallbacks) record(ctx context.Context, operation string, document []byte) error {
+	select {
+	case c.events <- documentProcessorEvent{operation, document}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("record %s callback: %w", operation, ctx.Err())
 	}
+}
+
+type documentProcessorReadyWatcher struct {
+	mongowatch.ChangeStreamWatcher
+	ready chan struct{}
+}
+
+// Start signals that the manager has initialized cancellation before delegating to the real watcher.
+func (w *documentProcessorReadyWatcher) Start(ctx context.Context, mode options.FullDocument,
+	point *mongowatch.ChangeStreamResumePoint, save, remove mongowatch.ChangeEventDispatcherFunc,
+	callbacks ...mongowatch.ChangeEventDispatcherFunc,
+) error {
+	close(w.ready)
+	return w.ChangeStreamWatcher.Start(ctx, mode, point, save, remove, callbacks...)
 }
