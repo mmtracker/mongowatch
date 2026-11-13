@@ -30,12 +30,16 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
+func mongoClientOptions(uri string) *options.ClientOptions {
+	return options.Client().SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true, ObjectIDAsHexString: true}).ApplyURI(uri)
+}
+
 // ConnectToMongo helper to connect and setup  mongo DB
 func ConnectToMongo(dbName string, connectURL string) *mongo.Database {
 	log.Info("connecting to MongoDB")
 
 	// Create MongoDB client
-	opts := options.Client().SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true}).ApplyURI(connectURL)
+	opts := mongoClientOptions(connectURL)
 	opts.SetServerSelectionTimeout(10 * time.Second)
 
 	client, err := mongo.Connect(opts)

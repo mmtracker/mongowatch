@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true}))
+	client, err := mongo.Connect(options.Client().ApplyURI(uri).SetBSONOptions(&options.BSONOptions{DefaultDocumentM: true, ObjectIDAsHexString: true}))
 	if err != nil {
 		cancel()
 		os.Exit(1)
